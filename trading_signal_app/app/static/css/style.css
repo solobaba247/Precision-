@@ -1,0 +1,27 @@
+body {
+  min-height: 100vh;
+}
+
+.trading-card {
+  background-color: rgb(44, 48, 52);
+  border-color: rgb(69, 77, 85);
+}
+
+.signal-buy {
+  color: #198754;
+  font-weight: bold;
+}
+
+.signal-sell {
+  color: #dc3545;
+  font-weight: bold;
+}
+
+.signal-hold {
+  color: #ffc107;
+  font-weight: bold;
+}
+
+.table-responsive {
+    max-height: 400px;
+}
