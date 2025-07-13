@@ -13,8 +13,8 @@ def create_app():
     PROJECT_ROOT = os.path.dirname(APP_DIR)
     ML_MODELS_FOLDER = os.path.join(PROJECT_ROOT, 'ml_models/')
 
-    # --- NEW: Expanded and Verified Asset Classes ---
-    # This list is much larger and uses ticker symbols known to be reliable on yfinance.
+    # --- CHANGE HERE: Using app.config and Expanded Asset List ---
+    # This is the standard and more robust way to handle Flask configuration.
     app.config['ASSET_CLASSES'] = {
         "Forex": [
             # Majors
@@ -38,7 +38,7 @@ def create_app():
             # Tech
             "AAPL", "GOOGL", "MSFT", "AMZN", "NVDA", "META", "TSLA", "AMD", "INTC", "CRM",
             # Finance
-            "JPM", "BAC", "WFC", "GS", "MS",
+            "JPM", "BAC", "WFC", "GS", "MS", "V", "MA",
             # Consumer & Retail
             "WMT", "COST", "HD", "NKE", "MCD", "KO",
             # Healthcare
@@ -59,17 +59,18 @@ def create_app():
             # Asia
             "^N225", # Nikkei 225 (Japan)
             "^HSI",  # Hang Seng (Hong Kong)
-            # Volatility
-            "^VIX"   # CBOE Volatility Index
+            # Volatility & Bonds
+            "^VIX",   # CBOE Volatility Index
+            "^TNX"    # 10-Year Treasury Yield
         ]
     }
+
     app.config['TIMEFRAMES'] = {
-        "15 Minute": "15m",
         "1 Hour": "1h",
-        "4 Hour": "4h",
-        "1 Day": "1d"
+        "4 Hours": "4h",
+        "1 Day": "1d",
+        "1 Week": "1wk"
     }
-    # --- End of added section ---
 
     # --- Load Model Artifacts ---
     print("\n--- Initializing Model Loading ---")
@@ -77,6 +78,13 @@ def create_app():
         model_path = os.path.join(ML_MODELS_FOLDER, 'model.joblib')
         scaler_path = os.path.join(ML_MODELS_FOLDER, 'scaler.joblib')
         features_path = os.path.join(ML_MODELS_FOLDER, 'feature_columns.csv')
+
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(f"Model file not found: {model_path}")
+        if not os.path.exists(scaler_path):
+            raise FileNotFoundError(f"Scaler file not found: {scaler_path}")
+        if not os.path.exists(features_path):
+            raise FileNotFoundError(f"Features file not found: {features_path}")
 
         app.model = joblib.load(model_path)
         print("✅ SUCCESS: Model loaded.")
@@ -87,10 +95,13 @@ def create_app():
         app.feature_columns = pd.read_csv(features_path)['feature_name'].tolist()
         print(f"✅ SUCCESS: Feature columns ({len(app.feature_columns)}) loaded.")
 
+        app.config['MODELS_LOADED'] = True
+
     except Exception as e:
         app.model = None
         app.scaler = None
         app.feature_columns = None
+        app.config['MODELS_LOADED'] = False
         print(f"🔥🔥🔥 CRITICAL ERROR loading ML artifacts: {e}")
 
     # Register routes
