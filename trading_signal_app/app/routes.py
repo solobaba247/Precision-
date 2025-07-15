@@ -126,16 +126,22 @@ def scan_market_route():
         symbols_to_scan = asset_classes[asset_type]
         
         results = []
-        with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+        # Reduced max_workers to 3 to avoid overwhelming free-tier resources and causing timeouts.
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_to_symbol = {
                 executor.submit(get_prediction_for_symbol_sync, symbol, timeframe, current_app.model, current_app.scaler, current_app.feature_columns): symbol for symbol in symbols_to_scan
             }
             for future in concurrent.futures.as_completed(future_to_symbol):
+                symbol_name = future_to_symbol[future]
                 try:
-                    result = future.result(timeout=30)
+                    # Increased timeout to 60s per symbol to allow for slow API responses.
+                    # This must be less than the main Gunicorn timeout (which should be set to 120s).
+                    result = future.result(timeout=60)
                     if result is not None: results.append(result)
+                except concurrent.futures.TimeoutError:
+                    print(f"⏰ Timeout processing {symbol_name} after 60 seconds. Skipping.")
                 except Exception as e:
-                    print(f"Error processing {future_to_symbol[future]}: {e}")
+                    print(f"Error processing {symbol_name}: {e}")
                     continue
         
         return jsonify(results)
