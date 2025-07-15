@@ -41,7 +41,7 @@ def fetch_yfinance_data(symbol, period='90d', interval='1h'):
     url = f"{BASE_URL}{endpoint}"
 
     try:
-        response = requests.get(url, params=params, timeout=25)
+        response = requests.get(url, params=params, timeout=45)
         response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
         
         data = response.json()
@@ -65,7 +65,8 @@ def fetch_yfinance_data(symbol, period='90d', interval='1h'):
         date_col_found = False
         for col_name in ['date', 'Date', 'datetime', 'Datetime', 'timestamp', 'Timestamp']:
             if col_name in df.columns:
-                df[col_name] = pd.to_datetime(df[col_name])
+                # --- CHANGE HERE: Added utc=True to robustly handle timezones like 'BST' ---
+                df[col_name] = pd.to_datetime(df[col_name], utc=True)
                 df = df.set_index(col_name)
                 df.index.name = 'Datetime' # Ensure index has a name
                 date_col_found = True
