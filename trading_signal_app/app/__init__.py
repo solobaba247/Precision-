@@ -13,7 +13,6 @@ def create_app():
     PROJECT_ROOT = os.path.dirname(APP_DIR)
     ML_MODELS_FOLDER = os.path.join(PROJECT_ROOT, 'ml_models/')
 
-    # --- CHANGE HERE: Using app.config and Expanded Asset List ---
     # This is the standard and more robust way to handle Flask configuration.
     app.config['ASSET_CLASSES'] = {
         "Forex": [
