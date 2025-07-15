@@ -9,7 +9,6 @@ from .helpers import calculate_stop_loss_value, get_latest_price, get_technical_
 @current_app.route('/')
 def index():
     """Main page route with template variables."""
-    # --- CHANGE HERE: Accessing variables from app.config ---
     return render_template('index.html', 
                          asset_classes=current_app.config.get('ASSET_CLASSES', {}),
                          timeframes=current_app.config.get('TIMEFRAMES', {}))
@@ -17,7 +16,6 @@ def index():
 @current_app.route('/api/check_model_status')
 def check_model_status():
     """Health check endpoint for model loading status."""
-    # --- CHANGE HERE: Accessing variable from app.config ---
     models_loaded = current_app.config.get('MODELS_LOADED', False)
     
     if models_loaded and current_app.model is not None and current_app.scaler is not None:
@@ -42,7 +40,6 @@ def generate_signal_route():
     if not symbol:
         return jsonify({"error": "Symbol parameter is required."}), 400
     
-    # --- CHANGE HERE: Accessing variable from app.config ---
     if not current_app.config.get('MODELS_LOADED', False):
         return jsonify({"error": "Models are not loaded. Please wait for initialization."}), 503
     
@@ -123,7 +120,6 @@ def scan_market_route():
         if not asset_type or asset_type not in asset_classes:
             return jsonify({"error": "Invalid asset type"}), 400
         
-        # --- CHANGE HERE: Accessing variable from app.config ---
         if not current_app.config.get('MODELS_LOADED', False):
             return jsonify({"error": "Models are not loaded. Please wait for initialization."}), 503
         
