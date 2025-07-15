@@ -9,7 +9,6 @@ document.addEventListener('DOMContentLoaded', () => {
     const categorySelect = document.getElementById('pair-category');
     const assetSelect = document.getElementById('asset-symbol');
     const generateSignalBtn = document.getElementById('generate-signal-btn');
-    const signalSpinner = document.getElementById('signal-spinner');
     const singleSignalResult = document.getElementById('single-signal-result');
     const scanSpinner = document.getElementById('scan-spinner');
     const scanResultsBody = document.getElementById('scan-results-body');
@@ -169,7 +168,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const timeframe = timeframeSelect.value;
 
         scanSpinner.classList.remove('d-none');
-        scanResultsBody.innerHTML = ''; // Clear previous results
+        scanResultsBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted">Scanning... This can take up to 2 minutes. Please wait.</td></tr>`;
         
         try {
             const response = await fetch('/api/scan_market', {
@@ -178,10 +177,23 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ asset_type: assetType, timeframe: timeframe })
             });
 
-            const results = await response.json();
-             if (response.status !== 200) {
-                 throw new Error(results.error || 'Failed to scan market.');
-             }
+            // Check if the response is successful. If not, parse error message.
+            if (!response.ok) { // .ok is true for HTTP statuses 200-299
+                let errorMessage = `Server error: ${response.status} ${response.statusText}`;
+                try {
+                    // Try to parse a JSON error from the backend, which is the expected format
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || JSON.stringify(errorData);
+                } catch (jsonError) {
+                    // If backend crashes (e.g., timeout), response might not be JSON.
+                    // This is where "unexpected end of JSON input" happens. We catch it.
+                    errorMessage = "The server took too long to respond and the request timed out. This can happen on free hosting. Please try again in a moment.";
+                }
+                throw new Error(errorMessage);
+            }
+
+            const results = await response.json(); // Now it's safe to parse JSON
+            scanResultsBody.innerHTML = ''; // Clear "Scanning..." message
 
             if (results.length > 0) {
                 results.forEach(signal => {
