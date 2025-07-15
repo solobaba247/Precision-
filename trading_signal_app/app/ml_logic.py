@@ -2,39 +2,110 @@
 
 import pandas as pd
 import numpy as np
-import yfinance as yf
+import requests
 import pandas_ta as ta
 import warnings
 
 warnings.filterwarnings('ignore')
 
 def fetch_yfinance_data(symbol, period='90d', interval='1h'):
-    """Fetches data directly using the yfinance library."""
-    print(f"--- Starting yfinance fetch for {symbol} ---")
+    """Fetches data from the custom finance API instead of yfinance."""
+    print(f"--- Starting API fetch for {symbol} ---")
+    
+    BASE_URL = "https://my-finance-appi.onrender.com/api"
+    endpoint = ""
+    api_symbol_param = 'symbol' 
+    api_symbol_value = symbol
+
+    # Determine the correct endpoint and symbol format based on conventions
+    if "=X" in symbol:
+        endpoint = "/forex/ohlc"
+        api_symbol_param = 'pair'
+        api_symbol_value = symbol.replace('=X', '')
+    elif "-USD" in symbol:
+        # Assumption: Crypto is treated like a stock by the new API, as no crypto endpoint is specified.
+        endpoint = "/stock/ohlc"
+        api_symbol_value = symbol
+    elif symbol.startswith('^'):
+        endpoint = "/index/ohlc"
+        api_symbol_value = symbol.replace('^', '')
+    else: # Default to stock
+        endpoint = "/stock/ohlc"
+        api_symbol_value = symbol
+
+    params = {
+        api_symbol_param: api_symbol_value,
+        'period': period, 
+        'interval': interval
+    }
+    url = f"{BASE_URL}{endpoint}"
+
     try:
-        ticker = yf.Ticker(symbol)
-        df = ticker.history(period=period, interval=interval, auto_adjust=False)
-        if df.empty:
-            print(f"   ⚠️ yfinance returned no data for {symbol}")
-            return None
+        response = requests.get(url, params=params, timeout=25)
+        response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
         
-        # Ensure proper column names
-        df.columns = df.columns.str.title()
+        data = response.json()
+        
+        if isinstance(data, dict) and 'error' in data:
+            print(f"   ⚠️ API returned an error for {symbol}: {data['error']}")
+            return None
+            
+        if not data or not isinstance(data, list):
+            print(f"   ⚠️ API returned no data or an invalid format for {symbol}")
+            return None
+            
+        df = pd.DataFrame(data)
+        
+        if df.empty:
+            print(f"   ⚠️ API returned no data for {symbol}")
+            return None
+            
+        # --- Data Cleaning and Standardization ---
+        # 1. Find and set Datetime Index (critical for pandas_ta and time features)
+        date_col_found = False
+        for col_name in ['date', 'Date', 'datetime', 'Datetime', 'timestamp', 'Timestamp']:
+            if col_name in df.columns:
+                df[col_name] = pd.to_datetime(df[col_name])
+                df = df.set_index(col_name)
+                df.index.name = 'Datetime' # Ensure index has a name
+                date_col_found = True
+                break
+        
+        if not date_col_found:
+            print(f"   ⚠️ No recognizable date/time column found for {symbol}. Cannot process.")
+            return None
+
+        # 2. Standardize OHLCV column names to TitleCase
+        df.columns = df.columns.str.lower()
+        df = df.rename(columns={
+            'open': 'Open', 'high': 'High', 'low': 'Low',
+            'close': 'Close', 'volume': 'Volume'
+        })
+        
+        # 3. Ensure all required columns are present after renaming
+        required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
+        if not all(col in df.columns for col in required_cols):
+             print(f"   ⚠️ Missing one or more OHLCV columns for {symbol}. Found: {df.columns.tolist()}")
+             return None
+
+        # 4. Drop 'Adj Close' if it exists and keep only required OHLCV columns
         if 'Adj Close' in df.columns:
             df = df.drop('Adj Close', axis=1)
         
-        # Keep only OHLCV data
-        df = df[['Open', 'High', 'Low', 'Close', 'Volume']].dropna()
+        df = df[required_cols].dropna()
         
         if not df.empty:
-            print(f"   ✅ Success with yfinance for {symbol}! Got {len(df)} rows")
+            print(f"   ✅ Success with API for {symbol}! Got {len(df)} rows")
             return df
         else:
             print(f"   ⚠️ No data after cleaning for {symbol}")
             return None
             
+    except requests.exceptions.RequestException as e:
+        print(f"   ❌ API fetch failed for {symbol}: {e}")
+        return None
     except Exception as e:
-        print(f"   ❌ yfinance fetch failed for {symbol}: {e}")
+        print(f"   ❌ Unexpected error processing API response for {symbol}: {e}")
         return None
 
 def create_features_for_prediction(data, feature_columns_list):
@@ -174,7 +245,7 @@ def get_model_prediction(data, model, scaler, feature_columns):
     except Exception as e:
         return {"error": f"Prediction failed: {str(e)}"}
 
-# Remove the async functions since we're using ThreadPoolExecutor instead
+# Alias for fetch_yfinance_data for backward compatibility.
 def fetch_data_via_proxies(symbol, period='90d', interval='1h'):
     """Alias for fetch_yfinance_data for backward compatibility."""
     return fetch_yfinance_data(symbol, period, interval)
