@@ -3,7 +3,7 @@ services:
     name: trading-signal-app
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 2 run:app
+    startCommand: startCommand: gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 2 -k gevent run:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.18
