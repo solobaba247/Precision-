@@ -6,18 +6,24 @@ from flask import jsonify
 from .ml_logic import fetch_data_via_proxies
 
 def calculate_stop_loss_value(symbol, entry_price, sl_price):
+    """
+    Calculates the approximate monetary value of a stop-loss based on assumed trade sizes.
+    """
     price_diff = abs(entry_price - sl_price)
     currency_map = {'USD': '$', 'JPY': '¥', 'GBP': '£', 'EUR': '€', 'CHF': 'Fr.'}
     try:
         if "=X" in symbol:
+            # Assumes a trade size of 1,000 units (e.g., 1 micro lot) for Forex pairs.
             value = price_diff * 1000
             quote_currency = symbol[3:6]
             currency_symbol = currency_map.get(quote_currency, quote_currency + ' ')
             return f"({currency_symbol}{value:,.2f})"
         elif "-USD" in symbol:
+            # Assumes a trade size of 0.01 units for Crypto (e.g., 0.01 BTC).
             value = price_diff * 0.01
             return f"(~${value:,.2f})"
-        else:
+        else: # Stocks
+            # Assumes a trade size of 1 share for stocks.
             value = price_diff * 1
             return f"(~${value:,.2f})"
     except Exception:
@@ -25,6 +31,7 @@ def calculate_stop_loss_value(symbol, entry_price, sl_price):
 
 def get_latest_price(symbol):
     if not symbol: return jsonify({"error": "Symbol parameter is required."}), 400
+    # Fetching with a very short interval to get the most recent price.
     data = fetch_data_via_proxies(symbol, period='1d', interval='1m')
     if data is None or data.empty: return jsonify({"error": f"Could not fetch latest price for {symbol}."}), 500
     latest_price = data['Close'].iloc[-1]
