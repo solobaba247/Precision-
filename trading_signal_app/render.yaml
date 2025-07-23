@@ -3,10 +3,12 @@ services:
     name: trading-signal-app
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: startCommand: gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 2 -k gevent run:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --timeout 120 --workers 2 -k gevent run:app
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.18
+      - key: FMP_API_KEY  # <-- RENAMED KEY
+        value: 3V5meXmuiupLM1fyL4vs6GeDB7RFA0LM # <-- YOUR NEW API KEY
       - key: WEB_CONCURRENCY
         value: 2
     plan: free
