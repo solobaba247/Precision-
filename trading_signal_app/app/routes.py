@@ -3,7 +3,8 @@
 from flask import current_app, render_template, request, jsonify
 import pandas as pd
 import concurrent.futures
-from .ml_logic import get_model_prediction, fetch_yfinance_data
+# UPDATED: Import the new function name
+from .ml_logic import get_model_prediction, fetch_fmp_data
 from .helpers import calculate_stop_loss_value, get_latest_price, get_technical_indicators
 
 def _get_and_format_signal(symbol, timeframe):
@@ -12,7 +13,8 @@ def _get_and_format_signal(symbol, timeframe):
     This consolidates logic for both single asset and market scan routes.
     """
     try:
-        data = fetch_yfinance_data(symbol, period='90d', interval=timeframe)
+        # UPDATED: Calling the new data fetching function
+        data = fetch_fmp_data(symbol, period='90d', interval=timeframe)
         if data is None or len(data) < 50:
             return {"error": f"Insufficient data for {symbol}. Need at least 50 data points."}
 
