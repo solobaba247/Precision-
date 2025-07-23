@@ -3,7 +3,6 @@
 from flask import current_app, render_template, request, jsonify
 import pandas as pd
 import concurrent.futures
-# UPDATED: Import the new function name
 from .ml_logic import get_model_prediction, fetch_fmp_data
 from .helpers import calculate_stop_loss_value, get_latest_price, get_technical_indicators
 
@@ -13,7 +12,6 @@ def _get_and_format_signal(symbol, timeframe):
     This consolidates logic for both single asset and market scan routes.
     """
     try:
-        # UPDATED: Calling the new data fetching function
         data = fetch_fmp_data(symbol, period='90d', interval=timeframe)
         if data is None or len(data) < 50:
             return {"error": f"Insufficient data for {symbol}. Need at least 50 data points."}
@@ -30,10 +28,8 @@ def _get_and_format_signal(symbol, timeframe):
         signal = prediction['signal']
         confidence = prediction['confidence']
         latest_price = prediction['latest_price']
-        latest_atr = prediction['latest_atr'] # Use ATR for dynamic SL/TP
+        latest_atr = prediction['latest_atr']
         
-        # ** NEW: Dynamic Stop-Loss and Exit Price Calculation using ATR **
-        # These multipliers (e.g., 1.5, 3.0) can be configured or optimized.
         atr_multiplier_sl = 1.5
         atr_multiplier_tp = 3.0
         
@@ -100,7 +96,6 @@ def get_prediction_for_symbol_sync(symbol, timeframe):
     """Synchronous wrapper for concurrent execution that filters for actionable signals."""
     result = _get_and_format_signal(symbol, timeframe)
     
-    # For the scanner, we only want actionable signals (BUY/SELL) without errors.
     if result and "error" not in result and result.get("signal") in ["BUY", "SELL"]:
         return result
     return None
@@ -138,7 +133,6 @@ def scan_market_route():
                 except Exception as e:
                     print(f"Error processing {symbol_name}: {e}")
 
-        # Sort results by confidence (higher first)
         results.sort(key=lambda x: float(x['confidence'].strip('%')), reverse=True)
         
         return jsonify(results)
