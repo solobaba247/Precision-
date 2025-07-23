@@ -7,8 +7,8 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.18
-      - key: FMP_API_KEY  # <-- RENAMED KEY
-        value: 3V5meXmuiupLM1fyL4vs6GeDB7RFA0LM # <-- YOUR NEW API KEY
+      - key: FMP_API_KEY
+        value: 3V5meXmuiupLM1fyL4vs6GeDB7RFA0LM
       - key: WEB_CONCURRENCY
         value: 2
     plan: free
