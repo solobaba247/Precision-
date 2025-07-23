@@ -14,9 +14,7 @@ load_dotenv()
 warnings.filterwarnings('ignore')
 
 # --- Configuration for the Financial Modeling Prep (FMP) API ---
-# This line securely reads the key from the environment variable.
-# The key '3V5meXmuiupLM1fyL4vs6GeDB7RFA0LM' was provided in API.txt
-FMP_API_KEY = os.getenv("FMP_API_KEY") 
+FMP_API_KEY = os.getenv("FMP_API_KEY")
 BASE_URL = "https://financialmodelingprep.com/api/v3"
 
 if not FMP_API_KEY:
@@ -24,13 +22,13 @@ if not FMP_API_KEY:
 
 def _format_symbol_for_fmp(symbol):
     """Converts the app's internal symbol format to FMP's format."""
-    # FMP uses standard tickers for stocks and indices (e.g., AAPL, ^GSPC)
     # Forex: EURUSD=X -> EURUSD
     if "=X" in symbol:
         return symbol.replace('=X', '')
     # Crypto: BTC-USD -> BTCUSD
     if "-USD" in symbol:
         return symbol.replace('-USD', 'USD')
+    # Stocks and indices (e.g., AAPL, ^GSPC) are usually fine
     return symbol
 
 def fetch_fmp_data(symbol, period='90d', interval='1h'):
@@ -40,18 +38,19 @@ def fetch_fmp_data(symbol, period='90d', interval='1h'):
         return None
 
     print(f"--- Starting FMP API fetch for {symbol} (Interval: {interval}) ---")
-    
+
     api_symbol = _format_symbol_for_fmp(symbol)
     
-    # FMP has different endpoints for intraday vs. daily data
     if interval in ['1h', '4h']:
-        # Use the historical chart endpoint for intraday data
-        url = f"{BASE_URL}/historical-chart/{interval}/{api_symbol}"
+        fmp_interval_string = '1hour' if interval == '1h' else '4hour'
+        url = f"{BASE_URL}/historical-chart/{fmp_interval_string}/{api_symbol}"
+        params = {'apikey': FMP_API_KEY}
+    elif interval == '1m':
+        url = f"{BASE_URL}/historical-chart/1min/{api_symbol}"
         params = {'apikey': FMP_API_KEY}
     elif interval in ['1d', '1wk']:
-        # Use the daily endpoint for daily and weekly data (we will resample for weekly)
         url = f"{BASE_URL}/historical-price-full/{api_symbol}"
-        params = {'apikey': FMP_API_KEY, 'serietype': 'line'} # serietype reduces response size
+        params = {'apikey': FMP_API_KEY, 'from': '2000-01-01'}
     else:
         print(f"   ❌ Unsupported interval for FMP: {interval}")
         return None
@@ -61,7 +60,11 @@ def fetch_fmp_data(symbol, period='90d', interval='1h'):
         response.raise_for_status()
         data = response.json()
 
-        # FMP returns data in different structures for daily vs intraday
+        if isinstance(data, dict) and "Error Message" in data:
+            error_message = data["Error Message"]
+            print(f"   ⚠️ FMP API returned an error for {symbol}: {error_message}")
+            return None
+
         if 'historical' in data:
             df = pd.DataFrame(data['historical'])
         elif isinstance(data, list) and len(data) > 0:
@@ -74,29 +77,24 @@ def fetch_fmp_data(symbol, period='90d', interval='1h'):
             print(f"   ⚠️ FMP API returned an empty DataFrame for {symbol}")
             return None
             
-        # --- Standardize the DataFrame ---
         df['datetime'] = pd.to_datetime(df['date'])
         df = df.set_index('datetime')
         
-        # Rename columns to the format the app expects
         df = df.rename(columns={'open': 'Open', 'high': 'High', 'low': 'Low', 'close': 'Close', 'volume': 'Volume'})
         
-        # Ensure correct data types
         ohlcv_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
         for col in ohlcv_cols:
-            df[col] = pd.to_numeric(df[col])
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col])
             
-        # FMP data is typically newest first, so we reverse it
         df = df.iloc[::-1]
 
-        # Handle weekly resampling if requested
         if interval == '1wk':
             agg_dict = {'Open': 'first', 'High': 'max', 'Low': 'min', 'Close': 'last', 'Volume': 'sum'}
             df = df.resample('W-FRI').agg(agg_dict).dropna()
 
-        # Select only the columns needed
         required_cols = ['Open', 'High', 'Low', 'Close', 'Volume']
-        df = df[required_cols].dropna()
+        df = df[[col for col in required_cols if col in df.columns]].dropna()
 
         print(f"   ✅ Success with FMP API for {symbol}! Got {len(df)} rows")
         return df
@@ -149,7 +147,9 @@ def create_features_for_prediction(data, feature_columns_list):
         df['is_weekend'] = (df.index.dayofweek >= 5).astype(int)
         
         df['risk_reward_ratio'] = 2.0
-        df['stop_loss_in_atrs']_in_atrs'] = 1.5
+        # --- THIS IS THE CORRECTED LINE ---
+        df['stop_loss_in_atrs'] = 1.5
+        # ------------------------------------
         df['entry_pos_in_channel_norm'] = (df['Close'] - df['channel_low']) / df['channel_width'].replace(0, 1)
 
         channel_dev = (df['Close'] - df['channel_mid']) / df['channel_width'].replace(0, 1)
@@ -231,7 +231,6 @@ def get_model_prediction(data, model, scaler, feature_columns):
     except Exception as e:
         return {"error": f"Prediction failed: {str(e)}"}
 
-# UPDATED: This alias now points to the new FMP data fetching function
 def fetch_data_via_proxies(symbol, period='90d', interval='1h'):
     """Alias for backward compatibility in helpers.py."""
     return fetch_fmp_data(symbol, period, interval)
