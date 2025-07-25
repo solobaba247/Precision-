@@ -6,7 +6,7 @@ import concurrent.futures
 from .ml_logic import get_model_prediction, fetch_fmp_data
 from .helpers import calculate_stop_loss_value, get_latest_price, get_technical_indicators
 
-def _get_and_format_signal(symbol, timeframe):
+def _get_and_format_signal(symbol, timeframe, app_context=None):
     """
     Internal helper to fetch data, generate a prediction, and format the full response.
     This consolidates logic for both single asset and market scan routes.
@@ -16,11 +16,21 @@ def _get_and_format_signal(symbol, timeframe):
         if data is None or len(data) < 50:
             return {"error": f"Insufficient data for {symbol}. Need at least 50 data points."}
 
+        # Use passed app context or current_app
+        if app_context:
+            model = app_context['model']
+            scaler = app_context['scaler']
+            feature_columns = app_context['feature_columns']
+        else:
+            model = current_app.model
+            scaler = current_app.scaler
+            feature_columns = current_app.feature_columns
+
         prediction = get_model_prediction(
             data,
-            current_app.model,
-            current_app.scaler,
-            current_app.feature_columns
+            model,
+            scaler,
+            feature_columns
         )
         if "error" in prediction:
             return prediction
@@ -92,9 +102,9 @@ def generate_signal_route():
     
     return jsonify(response)
 
-def get_prediction_for_symbol_sync(symbol, timeframe):
+def get_prediction_for_symbol_sync(symbol, timeframe, app_context):
     """Synchronous wrapper for concurrent execution that filters for actionable signals."""
-    result = _get_and_format_signal(symbol, timeframe)
+    result = _get_and_format_signal(symbol, timeframe, app_context)
     
     if result and "error" not in result and result.get("signal") in ["BUY", "SELL"]:
         return result
@@ -115,12 +125,19 @@ def scan_market_route():
         if not current_app.config.get('MODELS_LOADED', False):
             return jsonify({"error": "Models are not loaded."}), 503
         
+        # Pass app context to threads to avoid Flask context issues
+        app_context = {
+            'model': current_app.model,
+            'scaler': current_app.scaler,
+            'feature_columns': current_app.feature_columns
+        }
+        
         symbols_to_scan = asset_classes[asset_type]
         results = []
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
             future_to_symbol = {
-                executor.submit(get_prediction_for_symbol_sync, symbol, timeframe): symbol for symbol in symbols_to_scan
+                executor.submit(get_prediction_for_symbol_sync, symbol, timeframe, app_context): symbol for symbol in symbols_to_scan
             }
             for future in concurrent.futures.as_completed(future_to_symbol):
                 symbol_name = future_to_symbol[future]
